@@ -23,7 +23,7 @@
          registry (nothing here comes from it, so there is no <repositories> block). -->
     <groupId>eu.wohlben.qits</groupId>
     <artifactId>qits-bootstrap-graph</artifactId>
-    <version>1.0.0-SNAPSHOT</version>
+    <version>2026.1105.144428</version>
     <packaging>jar</packaging>
     <name>qits-bootstrap-graph</name>
 
