@@ -28,6 +28,12 @@ the jar.
 - **Discovery is ported, not redesigned.** `ManifestReader` produces what qits-maintenance-service's
   `ManifestScanner` produced from the same files: the root, the reactor, `docker/`, `.gitmodules` +
   gitlinks, one pin per line. A change here changes the maintenance inventory.
+- **The graph decides order, never action.** `ProjectGraph` is pure over `ProjectSource`; `Walk`
+  offers and the visitor acts. A walk never offers a member of a cycle, so how to break one (for
+  example qits-maintenance's one-knot-per-tick rule in `BumpOrder`) belongs to the caller.
+  `BumpOrderContractTest` pins down how the walk reproduces `BumpOrder.nextUpTo`'s READY picks.
+- **`Coordinate.key()` must stay byte-identical** to `ArtifactGraph.producerKey`
+  (`<wire name> <name>`), because the maintenance side indexes its ledger by it.
 - **A listed file that will not read is an exception, never fewer pins** (qits-1172): a partial set
   of pins is what the artifact GC would read as "unreferenced".
 - **Packages stay under `eu.wohlben.qits.bootstrap.graph`.** No split package with either embedder.
