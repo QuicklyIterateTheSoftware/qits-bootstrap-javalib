@@ -15,3 +15,9 @@ node_modules/
 
 # Logs
 *.log
+target-ide/
+
+# Home-relative caches a tool leaks into the repo root when run with the repo as its cwd
+.cache/
+.m2/
+.local/

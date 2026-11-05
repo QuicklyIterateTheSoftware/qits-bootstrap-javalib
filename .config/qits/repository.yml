@@ -8,7 +8,7 @@ version: 1
 repository:
   main-branch: main
   # What kind of component this is; qits reads it from here, never from the name.
-  # archetype: SERVICE   # or DAEMON, LIBRARY, FRONTEND, APP, CLI, IMAGE
+  archetype: LIBRARY
 
 # One-shot commands runnable from the workspace — builds, test suites, linters.
 # actions:
