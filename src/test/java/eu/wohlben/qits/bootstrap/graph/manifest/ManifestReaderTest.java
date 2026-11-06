@@ -478,4 +478,95 @@ class ManifestReaderTest {
     assertEquals("2026.8.3", pins.get(0).version());
     assertEquals("^2026.8.1", pins.get(0).range());
   }
+
+  // --- pnpm-lock.yaml: the two jslibs that carry no package-lock.json at all ------------------
+
+  private static final String PNPM_LOCK_YAML =
+      """
+      lockfileVersion: '9.0'
+
+      settings:
+        autoInstallPeers: true
+        excludeLinksFromLockfile: false
+
+      importers:
+
+        .:
+          dependencies:
+            '@qits/ui-components':
+              specifier: 2026.1106.121838
+              version: 2026.1106.121838
+          devDependencies:
+            '@analogjs/vite-plugin-angular':
+              specifier: ^2.6.4
+              version: 2.6.4(6cfc0391fb3c87d9d0956e87c2618858)
+      """;
+
+  /** A repository with no package-lock.json at all — the two jslibs — is still read. */
+  @Test
+  void aRootPackageJsonWithNoPackageLockIsReadThroughPnpmLock() {
+    Files files =
+        new Files()
+            .file(
+                "package.json",
+                """
+                {"dependencies":{"@qits/ui-components":"2026.1106.121838"},
+                 "devDependencies":{"@analogjs/vite-plugin-angular":"^2.6.4"}}
+                """)
+            .file(ManifestReader.PNPM_LOCK, PNPM_LOCK_YAML);
+
+    List<ParsedPin> pins = read(files);
+
+    assertEquals(2, pins.size());
+    ParsedPin uiComponents =
+        pins.stream().filter(p -> p.name().equals("@qits/ui-components")).findFirst().orElseThrow();
+    assertEquals("2026.1106.121838", uiComponents.version());
+    ParsedPin analog =
+        pins.stream()
+            .filter(p -> p.name().equals("@analogjs/vite-plugin-angular"))
+            .findFirst()
+            .orElseThrow();
+    assertEquals("2.6.4", analog.version(), "the peer suffix starting at '(' is stripped");
+  }
+
+  /** package-lock.json keeps precedence when a repository carries both. */
+  @Test
+  void packageLockWinsOverPnpmLockWhenBothExist() {
+    Files files =
+        new Files()
+            .file("package.json", "{\"dependencies\":{\"@qits/ui-components\":\"^2026.8.1\"}}")
+            .file(
+                ManifestReader.PACKAGE_LOCK,
+                "{\"packages\":{\"node_modules/@qits/ui-components\":{\"version\":\"2026.8.3\"}}}")
+            .file(ManifestReader.PNPM_LOCK, PNPM_LOCK_YAML);
+
+    List<ParsedPin> pins = read(files);
+
+    assertEquals(1, pins.size());
+    assertEquals("2026.8.3", pins.get(0).version(), "package-lock.json answered, so pnpm's was never read");
+    assertTrue(files.read.stream().noneMatch(ManifestReader.PNPM_LOCK::equals));
+  }
+
+  /** A pnpm-lock.yaml that will not parse pins nothing rather than failing the whole reading. */
+  @Test
+  void aMalformedPnpmLockYieldsNoNpmPinsRatherThanFailing() {
+    Files files =
+        new Files()
+            .file("package.json", "{\"dependencies\":{\"@qits/ui-components\":\"^2026.8.1\"}}")
+            .file(ManifestReader.PNPM_LOCK, "not: [valid: yaml");
+
+    assertTrue(read(files).isEmpty());
+  }
+
+  /** A pnpm-lock.yaml the listing names and the read does not answer fails the reading. */
+  @Test
+  void aListedPnpmLockReadAsAbsentFailsTheReading() {
+    Files files =
+        new Files()
+            .file("package.json", "{\"dependencies\":{\"@qits/ui-components\":\"2026.8.1\"}}")
+            .listedOnly(ManifestReader.PNPM_LOCK);
+
+    IllegalStateException failure = assertThrows(IllegalStateException.class, () -> read(files));
+    assertTrue(failure.getMessage().contains(ManifestReader.PNPM_LOCK), failure.getMessage());
+  }
 }

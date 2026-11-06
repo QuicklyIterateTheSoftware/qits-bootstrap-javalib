@@ -74,4 +74,79 @@ class NpmParserTest {
   void withNoLockThereIsNothingToPin() {
     assertTrue(NpmParser.parse("package.json", MANIFEST, null).isEmpty());
   }
+
+  // --- pnpm-lock.yaml -----------------------------------------------------------------------
+
+  private static final String PNPM_MANIFEST =
+      """
+      {"name":"spa",
+       "dependencies":{"@qits/ui-components":"2026.1106.121838","left-over":"workspace:*"},
+       "devDependencies":{"@analogjs/vite-plugin-angular":"^2.6.4","unlocked":"^1.0.0"}}
+      """;
+
+  private static final String PNPM_LOCK =
+      """
+      lockfileVersion: '9.0'
+
+      settings:
+        autoInstallPeers: true
+        excludeLinksFromLockfile: false
+
+      importers:
+
+        .:
+          dependencies:
+            '@qits/ui-components':
+              specifier: 2026.1106.121838
+              version: 2026.1106.121838
+            left-over:
+              specifier: workspace:*
+              version: link:../left-over
+          devDependencies:
+            '@analogjs/vite-plugin-angular':
+              specifier: ^2.6.4
+              version: 2.6.4(6cfc0391fb3c87d9d0956e87c2618858)
+
+      packages:
+        irrelevant: {}
+      """;
+
+  @Test
+  void pnpmLockResolvesDirectDependenciesAndDevDependencies() {
+    List<ParsedPin> pins =
+        NpmParser.parse("package.json", PNPM_MANIFEST, PNPM_LOCK, NpmParser.LockKind.PNPM_LOCK);
+
+    ParsedPin uiComponents = find(pins, "@qits/ui-components").orElseThrow();
+    assertEquals("2026.1106.121838", uiComponents.version());
+    assertEquals("dependencies", uiComponents.location());
+
+    ParsedPin analog = find(pins, "@analogjs/vite-plugin-angular").orElseThrow();
+    assertEquals("2.6.4", analog.version(), "the peer suffix starting at '(' is stripped");
+    assertEquals("devDependencies", analog.location());
+  }
+
+  @Test
+  void pnpmLinkDependencyIsNotAPin() {
+    List<ParsedPin> pins =
+        NpmParser.parse("package.json", PNPM_MANIFEST, PNPM_LOCK, NpmParser.LockKind.PNPM_LOCK);
+
+    assertTrue(find(pins, "left-over").isEmpty());
+  }
+
+  @Test
+  void pnpmDependencyTheLockDoesNotResolveIsNotAPin() {
+    List<ParsedPin> pins =
+        NpmParser.parse("package.json", PNPM_MANIFEST, PNPM_LOCK, NpmParser.LockKind.PNPM_LOCK);
+
+    assertTrue(find(pins, "unlocked").isEmpty());
+  }
+
+  @Test
+  void malformedPnpmLockYieldsNoVersions() {
+    List<ParsedPin> pins =
+        NpmParser.parse(
+            "package.json", PNPM_MANIFEST, "not: [valid: yaml", NpmParser.LockKind.PNPM_LOCK);
+
+    assertTrue(pins.isEmpty());
+  }
 }

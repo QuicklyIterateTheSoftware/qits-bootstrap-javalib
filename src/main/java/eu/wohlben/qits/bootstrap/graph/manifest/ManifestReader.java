@@ -43,6 +43,14 @@ public final class ManifestReader {
   /** The lock beside a root package.json. Without it a manifest has ranges and no versions. */
   public static final String PACKAGE_LOCK = "package-lock.json";
 
+  /**
+   * pnpm's own lock, read when a repository carries no {@link #PACKAGE_LOCK} at all. A couple of
+   * platform repositories lock with pnpm instead of npm and so have no {@code package-lock.json}
+   * to resolve through; without this, {@link #npmPins} silently pinned zero npm dependencies for
+   * them, and qits-maintenance never bumped one.
+   */
+  public static final String PNPM_LOCK = "pnpm-lock.yaml";
+
   /** What a gitlink pin's location says: the path the {@code 160000} entry sits at. */
   public static final String GITLINK_LOCATION = "gitlink:";
 
@@ -182,19 +190,31 @@ public final class ManifestReader {
     return value.endsWith("/") ? value.substring(0, value.length() - 1) : value;
   }
 
-  /** The root package.json, resolved through the lock beside it. */
+  /**
+   * The root package.json, resolved through the lock beside it.
+   *
+   * <p><b>package-lock.json wins when both exist.</b> {@link #PACKAGE_LOCK} is checked first, and
+   * {@link #PNPM_LOCK} is read only when the repository carries no package-lock.json at all —
+   * which is also when pnpm would actually be the one installing from it.
+   */
   private static List<ParsedPin> npmPins(RepositoryFiles files, Set<String> root) {
     if (!root.contains("package.json")) {
       return List.of();
     }
     String manifest = listed(files, "package.json");
-    String lock = null;
     if (root.contains(PACKAGE_LOCK)) {
       // The lock is where every npm VERSION comes from: a manifest read without it pins nothing,
       // so an unreadable lock is as unreadable as an unreadable manifest.
-      lock = listed(files, PACKAGE_LOCK);
+      String lock = listed(files, PACKAGE_LOCK);
+      return NpmParser.parse("package.json", manifest, lock, NpmParser.LockKind.PACKAGE_LOCK);
     }
-    return NpmParser.parse("package.json", manifest, lock);
+    if (root.contains(PNPM_LOCK)) {
+      // Same treatment as package-lock.json above: the lock is where the npm VERSION comes
+      // from, so an unreadable pnpm-lock.yaml is as unreadable as an unreadable manifest.
+      String lock = listed(files, PNPM_LOCK);
+      return NpmParser.parse("package.json", manifest, lock, NpmParser.LockKind.PNPM_LOCK);
+    }
+    return NpmParser.parse("package.json", manifest, null);
   }
 
   /**
